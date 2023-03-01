@@ -1,0 +1,25 @@
+#bowtie2 index
+bowtie2-build --threads 6 /public/home/xxmiao/index/Zm-B73-REFERENCE-GRAMENE-4.0.fasta index
+#bowtie2 比对
+bowtie2 -p 10 --no-mixed --no-discordant -x /public/home/xxmiao/index/index -1 ${i}_R1.fq.gz -2 ${i}_R2.fq.gz -S result/${i}.sam
+#samtools 去重
+head -n 269 ${i}.sam > ${i}.txt
+grep "AS:" ${i}.sam |grep -v "XS:" > ${i}_uniq.sam
+cat ${i}.txt ${i}_uniq.sam > ${i}_uniqtrimm.sam
+samtools view -b -q 30 -S ${i}_uniqtrimm.sam -o ${i}_uniqtrimm.bam
+samtools sort -o ${i}_uniqtrimm.sorted.bam ${i}_uniqtrimm.bam
+samtools rmdup ${i}_uniqtrimm.sorted.bam ${i}_uniqtrimm.sorted.rmdup.bam
+#MACS2 call peak
+macs2 callpeak -g 2.2e+9 -t ${i}_uniqtrimm.sorted.rmdup.bam -c Input_uniqtrimm.sorted.rmdup.bam -n ${i} --outdir callpeak -s 150 -B -p 1e-5 -f BAMPE
+#R ChIPseeker
+library(ChIPseeker)
+library(BiocGenerics)
+library(GenomicFeatures)
+spompe <- makeTxDbFromGFF('Zea_mays.B73_RefGen_v4.49.gff3')
+peak <- readPeakFile('${i}_peaks.narrowPeak')
+peakAnno <- annotatePeak(peak, tssRegion = c(-3000, 3000), TxDb = spompe)
+write.table(peakAnno, file = '${i}.txt',sep = '\t', quote = FALSE, row.names = FALSE)
+#png ('Pie-summarize the distribution of peaks over different type of features.png')
+png(filename = "${i}.png",width = 3500,height = 2000,res = 600)
+plotAnnoPie(peakAnno)
+dev.off()
